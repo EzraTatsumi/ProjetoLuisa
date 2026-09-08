@@ -446,7 +446,7 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", aplic
     </div>
 
     <div class="sec">
-      <h3>Som</h3>
+      <h3>Som e vibração</h3>
       <div class="row">
         <span class="lab">Sons do jogo<span class="sub">Palmas no acerto, som neutro e curto no erro</span></span>
         <button class="sw" id="swSom" aria-pressed="true" aria-label="Sons"></button>
@@ -458,6 +458,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", aplic
       <div class="row">
         <span class="lab">Volume</span>
         <div class="segs" id="segVol"></div>
+      </div>
+      <div class="row">
+        <span class="lab">Vibração ao arrastar<span class="sub">Um toque ao passar pela caixa certa, um soluço ao errar. iPhone não tem essa vibração — o Safari não oferece; funciona em Android</span></span>
+        <button class="sw" id="swVibra" aria-pressed="true" aria-label="Vibração"></button>
       </div>
     </div>
 
@@ -549,7 +553,7 @@ function svgForma(id, contorno){
 
 /* ---------------- ajustes ---------------- */
 var PADRAO = {niveis:1, rodada:6, dicas:true, preview:true, som:true, voz:true, vol:2,
-              forma:"bola", direcao:"sobe", tema:"auto", distancia:"medio"};
+              forma:"bola", direcao:"sobe", tema:"auto", distancia:"medio", vibra:true};
 var cfg = load("cdc.cfg", PADRAO);
 function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v?Object.assign({},d,v):Object.assign({},d);}catch(e){return Object.assign({},d);} }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -610,6 +614,17 @@ document.addEventListener("visibilitychange", function(){
 });
 function vol(){ return [0,0.35,0.7,1][cfg.vol] * 0.85; }
 function setVol(){ if(master) master.gain.value = vol(); }
+
+/* ---------------- vibração ---------------- */
+/* O iPhone não tem essa API — o Safari nunca implementou navigator.vibrate,
+   por decisão da Apple. Aqui isso não quebra nada: a chamada some sozinha
+   (checada por navigator.vibrate abaixo) e o toque de vibração some do
+   painel, pois não haveria como testá-lo naquele aparelho. Já funciona em
+   Android e no Chrome/Edge de desktop com tela sensível — ou se a Apple
+   decidir implementar um dia. */
+function vibrar(padrao){
+  if(cfg.vibra && navigator.vibrate) navigator.vibrate(padrao);
+}
 
 /* Uma palma: transiente de ruído com ataque instantâneo e decaimento de ~12 ms,
    passa-alta para tirar a lama e um pico ressonante na região da cavidade da mão.
@@ -700,7 +715,7 @@ function reduzido(){ try{ return matchMedia("(prefers-reduced-motion: reduce)").
 
 /* ---------------- estado ---------------- */
 var fila=[], atual=null, item=null, feito=0, caixas=[];
-var tIni=0, tPrimeiroToque=0, errosNaTentativa=0, dicaUsada=0;
+var tIni=0, tPrimeiroToque=0, errosNaTentativa=0, dicaUsada=0, tentativasSemSucesso=0;
 var timers=[], rodando=false;
 
 function paleta(){ return CORES.slice(0, cfg.niveis); }
@@ -810,7 +825,7 @@ function proximo(){
   item.setAttribute("aria-label", FORMAS[forma].nome + ", " + atual.nome);
   stage.appendChild(item);
   item.addEventListener("pointerdown", pegar);
-  tIni = performance.now(); tPrimeiroToque = 0; errosNaTentativa = 0; dicaUsada = 0;
+  tIni = performance.now(); tPrimeiroToque = 0; errosNaTentativa = 0; dicaUsada = 0; tentativasSemSucesso = 0;
   agendarDicas();
 }
 
@@ -822,9 +837,34 @@ function limparTimers(restaurar){
 }
 function agendarDicas(){
   if(!cfg.dicas || !rodando) return;
-  timers.push(setTimeout(function(){ dicaUsada = Math.max(dicaUsada,1); alvo().elemento.classList.add("cue"); }, 5000));
-  timers.push(setTimeout(function(){ dicaUsada = Math.max(dicaUsada,2); desenharCaminho(); }, 10000));
-  timers.push(setTimeout(function(){ dicaUsada = Math.max(dicaUsada,3); conduzir(); }, 15000));
+  timers.push(setTimeout(function(){ acionarDica(1); }, 5000));
+  timers.push(setTimeout(function(){ acionarDica(2); }, 10000));
+  timers.push(setTimeout(function(){ acionarDica(3); }, 15000));
+}
+function acionarDica(nivel){
+  dicaUsada = Math.max(dicaUsada, nivel);
+  if(nivel === 1) alvo().elemento.classList.add("cue");
+  else if(nivel === 2) desenharCaminho();
+  else if(nivel === 3) conduzir();
+}
+/* Cada tentativa que termina sem acerto conta aqui — solto fora de qualquer
+   caixa (o "só clicar", sem arrastar de verdade) e solto na caixa errada.
+   Sem isto, uma criança que fica tocando e soltando rápido no mesmo lugar
+   reagenda os timers de 5/10/15s a cada tentativa (agendarDicas() reinicia a
+   contagem) e a ajuda nunca tem tempo de aparecer sozinha — foi exatamente
+   isso que exigiu ajuda manual. Este contador não depende do relógio:
+   acumula tentativa após tentativa, e ao cruzar um limiar já pula direto
+   para o nível de ajuda correspondente, não importa quão rápido cada
+   tentativa tenha sido. Fica de fora do registro/CSV de propósito — aquele
+   "erros" mede confusão de cor (queda na caixa errada), não toque solto. */
+var LIMIARES_TENTATIVA = [2, 4, 6];   /* tentativas até pular para nível 1, 2, 3 */
+function registrarTentativaFrustrada(){
+  tentativasSemSucesso++;
+  for(var nivel=1; nivel<=3; nivel++){
+    if(tentativasSemSucesso >= LIMIARES_TENTATIVA[nivel-1] && dicaUsada < nivel){
+      acionarDica(nivel);
+    }
+  }
 }
 function alvo(){ for(var i=0;i<caixas.length;i++) if(caixas[i].cor.id === atual.id) return caixas[i]; return caixas[0]; }
 
@@ -1015,7 +1055,12 @@ function mover(ev){
   if(alvoCaixa !== sobre){
     caixas.forEach(function(b){ b.elemento.classList.remove("ok","no"); });
     sobre = alvoCaixa;
-    if(sobre && cfg.preview) sobre.elemento.classList.add(sobre.cor.id === atual.id ? "ok" : "no");
+    if(sobre){
+      if(cfg.preview) sobre.elemento.classList.add(sobre.cor.id === atual.id ? "ok" : "no");
+      /* Um toque só, ao entrar na caixa certa — não a cada pointermove
+         (ficaria zunindo o tempo todo enquanto o dedo passeia por cima). */
+      if(sobre.cor.id === atual.id) vibrar(15);
+    }
   }
 }
 function caixaSob(cx, cy){
@@ -1035,7 +1080,7 @@ function soltar(ev){
   item.removeEventListener("pointercancel", soltar);
   var destino = caixaSob(ev.clientX, ev.clientY);
   caixas.forEach(function(b){ b.elemento.classList.remove("ok","no"); });
-  if(!destino){ voltarDock(); agendarDicas(); return; }
+  if(!destino){ registrarTentativaFrustrada(); voltarDock(); agendarDicas(); return; }
   if(destino.cor.id === atual.id) acertar(destino);
   else errar(destino);
 }
@@ -1047,6 +1092,7 @@ function voltarDock(){
 }
 function errar(destino){
   errosNaTentativa++;
+  registrarTentativaFrustrada();
   /* O erro é gravado no instante em que acontece. Se ficasse só somado ao
      registro do acerto, o painel mostraria zero enquanto o item não fosse
      concluído — e um item abandonado (recarregar, trocar ajuste, fim de
@@ -1062,6 +1108,7 @@ function errar(destino){
     dica: dicaUsada
   });
   somNeutro();
+  vibrar([40,60,40]);
   voltarDock();
   agendarDicas();
 }
@@ -1200,7 +1247,7 @@ function pintarControles(){
 }
 pintarControles();
 chave("swDicas","dicas"); chave("swPreview","preview");
-chave("swSom","som"); chave("swVoz","voz");
+chave("swSom","som"); chave("swVoz","voz"); chave("swVibra","vibra");
 
 /* ---------------- dados ---------------- */
 function dados(){ return log.filter(function(r){ return r.s === sessaoId; }); }
