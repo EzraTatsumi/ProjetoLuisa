@@ -317,8 +317,10 @@ td .dot{display:inline-block; width:9px; height:9px; border-radius:50%; vertical
 
 .formas{display:grid; grid-template-columns:repeat(3,1fr); gap:9px; margin-top:12px}
 /* "Sortear" não é uma forma entre as outras, é o modo em que elas se alternam:
-   ocupa a linha inteira para ler como opção à parte. */
-.forma.sortear{grid-column:1 / -1}
+   ocupa a linha inteira, sem desenho, para ler como opção à parte. */
+.forma.sortear{grid-column:1 / -1; padding:15px 12px 13px; gap:3px}
+.forma.sortear span{font-size:14px}
+.forma.sortear em{font-style:normal; font-size:12px; color:var(--muted); line-height:1.45; text-align:center}
 .forma{
   border:1px solid var(--hair); background:var(--surface); border-radius:13px;
   padding:13px 6px 10px; display:grid; justify-items:center; gap:7px; cursor:pointer;
@@ -342,6 +344,26 @@ td .dot{display:inline-block; width:9px; height:9px; border-radius:50%; vertical
   *{animation-duration:.001ms !important; transition-duration:.001ms !important}
 }
 </style>
+
+<script>
+/* O tema é resolvido aqui, antes de o corpo da página existir: se esperasse o
+   script do fim do arquivo, a tela apareceria por um instante no tema errado.
+   Também acerta a cor da barra do navegador — num site publicado é ela que
+   emoldura o jogo, e ficar clara com o jogo escuro denuncia a emenda. */
+function aplicarTema(){
+  var t = "auto";
+  try{ var c = JSON.parse(localStorage.getItem("cdc.cfg")); if(c && c.tema) t = c.tema; }catch(e){}
+  var r = document.documentElement;
+  if(t === "claro") r.setAttribute("data-theme", "light");
+  else if(t === "escuro") r.setAttribute("data-theme", "dark");
+  else r.removeAttribute("data-theme");
+  var m = document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute("content", getComputedStyle(r).getPropertyValue("--ground").trim() || "#F7F5F2");
+}
+aplicarTema();
+/* No modo automático o aparelho pode trocar de tema com o jogo aberto. */
+try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", aplicarTema); }catch(e){}
+</script>
 
 <div class="app" id="app">
   <button class="handle" id="handle" aria-label="Painel dos pais (segure para abrir)"><i></i></button>
@@ -430,6 +452,15 @@ td .dot{display:inline-block; width:9px; height:9px; border-radius:50%; vertical
     </div>
 
     <div class="sec">
+      <h3>Tela</h3>
+      <p class="note">Por padrão o jogo segue o tema do aparelho: se o celular está no modo escuro, o jogo fica escuro junto. As cores das caixas são as mesmas nos dois — só o fundo muda. Fixe em claro ou escuro se preferir que não mude sozinho.</p>
+      <div class="row">
+        <span class="lab">Tema<span class="sub">Automático acompanha o aparelho</span></span>
+        <div class="segs" id="segTema"></div>
+      </div>
+    </div>
+
+    <div class="sec">
       <h3>Sessão de hoje</h3>
       <div class="stats" id="stats"></div>
       <div class="tw" id="tw"></div>
@@ -495,11 +526,6 @@ function formaDoItem(){
   var ids = Object.keys(FORMAS).filter(function(id){ return id !== formaAtual; });
   return (formaAtual = ids[(Math.random()*ids.length)|0]);
 }
-var SORTEAR_SVG =
-  '<svg viewBox="-6 -6 112 112" aria-hidden="true">' +
-  '<rect class="corpo" x="10" y="10" width="80" height="80" rx="20"/>' +
-  '<g class="claro"><circle cx="33" cy="33" r="8"/><circle cx="50" cy="50" r="8"/>' +
-  '<circle cx="67" cy="67" r="8"/></g></svg>';
 /* Várias figuras são montagens de peças sobrepostas (a flor, o carro, o trem),
    então um stroke aplicado direto desenharia também as emendas internas. Por
    isso o contorno é uma cópia da figura por baixo, com traço grosso: a cópia
@@ -513,7 +539,7 @@ function svgForma(id, contorno){
 
 /* ---------------- ajustes ---------------- */
 var PADRAO = {niveis:1, rodada:6, dicas:true, preview:true, som:true, voz:true, vol:2,
-              forma:"bola", direcao:"sobe"};
+              forma:"bola", direcao:"sobe", tema:"auto"};
 var cfg = load("cdc.cfg", PADRAO);
 function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v?Object.assign({},d,v):Object.assign({},d);}catch(e){return Object.assign({},d);} }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -1049,16 +1075,22 @@ function chave(id, prop, extra){
 function pintarFormas(){
   var host = el("formas");
   host.innerHTML = "";
-  function botao(id, desenho, nome, classe){
+  function botao(id, dentro, classe){
     var b = document.createElement("button");
     b.type = "button"; b.className = "forma" + (classe || "");
     b.setAttribute("aria-pressed", cfg.forma === id ? "true" : "false");
-    b.innerHTML = desenho + "<span>" + nome + "</span>";
+    b.innerHTML = dentro;
     b.addEventListener("click", function(){ cfg.forma = id; save("cdc.cfg", cfg); pintarFormas(); });
     host.appendChild(b);
   }
-  Object.keys(FORMAS).forEach(function(id){ botao(id, svgForma(id), FORMAS[id].nome); });
-  botao("sortear", SORTEAR_SVG, "Sortear a cada item", " sortear");
+  Object.keys(FORMAS).forEach(function(id){
+    botao(id, svgForma(id) + "<span>" + FORMAS[id].nome + "</span>");
+  });
+  /* Sem desenho: qualquer figura aqui seria uma das seis de cima e leria como
+     "escolha esta", que é o contrário do que a opção faz. */
+  botao("sortear",
+    "<span>Sortear a cada item</span><em>Um desenho diferente em cada exercício</em>",
+    " sortear");
 }
 function pintarControles(){
   pintarFormas();
@@ -1068,6 +1100,9 @@ function pintarControles(){
   segmento(el("segNiveis"), [1,2,3,4], cfg.niveis, null, function(v){ cfg.niveis = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segRodada"), [4,6,8,12], cfg.rodada, null, function(v){ cfg.rodada = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segVol"), [1,2,3], cfg.vol, function(v){ return ["","baixo","médio","alto"][v]; }, function(v){ cfg.vol = v; save("cdc.cfg", cfg); setVol(); pintarControles(); });
+  segmento(el("segTema"), ["auto","claro","escuro"], cfg.tema,
+    function(v){ return v === "auto" ? "automático" : v; },
+    function(v){ cfg.tema = v; save("cdc.cfg", cfg); aplicarTema(); pintarControles(); });
 }
 pintarControles();
 chave("swDicas","dicas"); chave("swPreview","preview");
