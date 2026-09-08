@@ -445,6 +445,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", aplic
         <span class="lab">Contorno verde / vermelho<span class="sub">Mostra o resultado antes de soltar. Desligue quando ela já emparelhar sozinha — senão ela aprende a seguir o contorno, não a cor</span></span>
         <button class="sw" id="swPreview" aria-pressed="true" aria-label="Contorno de resultado"></button>
       </div>
+      <div class="row">
+        <span class="lab">Depois de errar, o caminho parte de<span class="sub">Pote: sempre o mesmo gesto, do mesmo lugar — ajuda a fixar a rotina. Erro: parte de onde ela largou, ligando a correção direto ao erro</span></span>
+        <div class="segs" id="segCorrigir"></div>
+      </div>
     </div>
 
     <div class="sec">
@@ -555,7 +559,8 @@ function svgForma(id, contorno){
 
 /* ---------------- ajustes ---------------- */
 var PADRAO = {niveis:1, rodada:6, dicas:true, preview:true, som:true, voz:true, vol:2,
-              forma:"bola", direcao:"sobe", tema:"auto", distancia:"medio", vibra:true};
+              forma:"bola", direcao:"sobe", tema:"auto", distancia:"medio", vibra:true,
+              corrigirDe:"pote"};
 var cfg = load("cdc.cfg", PADRAO);
 function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v?Object.assign({},d,v):Object.assign({},d);}catch(e){return Object.assign({},d);} }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -1105,14 +1110,22 @@ function soltar(ev){
   item.removeEventListener("pointercancel", soltar);
   var destino = caixaSob(ev.clientX, ev.clientY);
   caixas.forEach(function(b){ b.elemento.classList.remove("ok","no"); });
-  /* voltarDock() primeiro: ela liga a classe "ease" (o deslizar de volta ao
-     dock). Se a contagem de tentativas escalasse a dica ANTES disso, e essa
-     escalada caísse no nível 2 (demoMao arrastando o item quadro a quadro),
-     o voltarDock() rodando por último religaria "ease" bem na hora em que a
-     demonstração começa — e cada quadro passaria a ser suavizado por cima
-     pela transição, a bolinha "chegando atrasada" em vez de ocupar o ponto
-     na hora. voltarDock() tem que terminar antes de qualquer dica nova. */
-  if(!destino){ voltarDock(); registrarTentativaFrustrada(); agendarDicas(); return; }
+  /* Em "pote", volta antes de qualquer dica nova (ela liga a classe "ease",
+     o deslizar suave até o dock) — se a contagem de tentativas escalasse a
+     dica ANTES disso, e essa escalada caísse no nível 2 (demoMao arrastando
+     o item quadro a quadro), o voltarDock() rodando por último religaria
+     "ease" bem na hora em que a demonstração começa, e cada quadro passaria
+     a ser suavizado por cima pela transição — a bolinha "chegando atrasada"
+     em vez de ocupar o ponto na hora. Em "erro" não tem esse risco: o item
+     simplesmente fica onde caiu (nenhuma classe nova é ligada), e se o
+     nível 2 disparar, desenharCaminho() lê essa posição — o caminho sai
+     de onde ela largou, não do pote. */
+  if(!destino){
+    if(cfg.corrigirDe !== "erro") voltarDock();
+    registrarTentativaFrustrada();
+    agendarDicas();
+    return;
+  }
   if(destino.cor.id === atual.id) acertar(destino);
   else errar(destino);
 }
@@ -1140,10 +1153,12 @@ function errar(destino){
   });
   somNeutro();
   vibrar([40,60,40]);
-  voltarDock();
-  /* Depois de voltarDock(), nunca antes — mesmo motivo do soltar(): se isto
-     escalar para o nível 2 (demoMao), precisa ser a última coisa a mexer na
-     classe "ease" do item. */
+  /* Em "pote", volta antes de qualquer dica nova — nunca depois, mesmo
+     motivo do soltar(): se isto escalar para o nível 2, precisa ser a
+     última coisa a mexer na classe "ease" do item. Em "erro", a bolinha
+     fica exatamente na caixa errada onde caiu; se o nível 2 disparar, o
+     caminho sai dali até a caixa certa. */
+  if(cfg.corrigirDe !== "erro") voltarDock();
   registrarTentativaFrustrada();
   agendarDicas();
 }
@@ -1279,6 +1294,8 @@ function pintarControles(){
   segmento(el("segTema"), ["auto","claro","escuro"], cfg.tema,
     function(v){ return v === "auto" ? "automático" : v; },
     function(v){ cfg.tema = v; save("cdc.cfg", cfg); aplicarTema(); pintarControles(); });
+  segmento(el("segCorrigir"), ["pote","erro"], cfg.corrigirDe, null,
+    function(v){ cfg.corrigirDe = v; save("cdc.cfg", cfg); pintarControles(); });
 }
 pintarControles();
 chave("swDicas","dicas"); chave("swPreview","preview");
