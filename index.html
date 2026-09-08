@@ -582,6 +582,14 @@ function audioOn(){
   master = ctx.createGain();
   master.gain.value = vol();
   master.connect(ctx.destination);
+  /* iOS pode suspender o contexto por motivos que não passam pela aba ficar
+     escondida — uma notificação, o Siri, a central de controle, ou o
+     próprio sistema economizando energia num áudio parado. onstatechange
+     reage ao estado do CONTEXTO em si, não a um evento específico que
+     talvez nunca dispare: toda vez que ele cair para "suspended", tenta
+     retomar na hora — sem esperar o próximo toque no jogo, que era o único
+     jeito de se recuperar disso até aqui. */
+  ctx.onstatechange = function(){ if(ctx.state === "suspended") ctx.resume(); };
   destravarIOS();
 }
 /* O iPhone silencia o Web Audio API (osciladores e buffers, que é tudo que
@@ -610,9 +618,16 @@ function destravarIOS(){
 }
 /* iOS suspende o AudioContext ao bloquear a tela ou trocar de app — sem isto,
    ele só voltaria a tocar na próxima vez que pegar() ou o botão "Começar"
-   rodassem audioOn(), o que pode nunca acontecer no meio de uma rodada. */
-document.addEventListener("visibilitychange", function(){
-  if(document.visibilityState === "visible" && ctx && ctx.state === "suspended") ctx.resume();
+   rodassem audioOn(), o que pode nunca acontecer no meio de uma rodada.
+   visibilitychange cobre a aba escondida/trocar de app; focus e pageshow
+   cobrem o caso de a aba nunca ter saído de vista mas o sistema (ou o
+   Safari) ter suspendido o áudio por conta própria enquanto o jogo ficava
+   parado, esperando no painel dos pais por exemplo — onstatechange (acima)
+   é a rede que pega o resto. */
+["visibilitychange","focus","pageshow"].forEach(function(ev){
+  (ev === "visibilitychange" ? document : window).addEventListener(ev, function(){
+    if(ctx && ctx.state === "suspended") ctx.resume();
+  });
 });
 function vol(){ return [0,0.35,0.7,1][cfg.vol] * 0.85; }
 function setVol(){ if(master) master.gain.value = vol(); }
