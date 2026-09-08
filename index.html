@@ -190,7 +190,9 @@ button{font:inherit;color:inherit}
 
 .mao{
   position:absolute; left:0; top:0; width:84px; height:auto;
-  opacity:0; pointer-events:none; z-index:26;
+  opacity:0; pointer-events:none; z-index:29;   /* acima do .item (28): a luva é bem
+    mais larga que o dedo fino de antes — atrás do item, um pedaço dela sumia
+    toda vez que encostava na bolinha, e isso é que lia como "atraso" */
   filter:drop-shadow(0 5px 9px rgba(0,0,0,.22));
   will-change:transform, opacity;
 }
@@ -900,6 +902,14 @@ function arco(c){ return c.para.y < c.de.y ? 40 : -40; }
 function demoMao(c){
   if(reduzido()) return;
   demoAtiva = true;
+  /* Se o item chegou aqui vindo de um erro, ele ainda carrega a classe
+     "ease" — a transição suave de 300ms que o fez voltar deslizando até o
+     dock. Sem tirar essa classe agora, cada quadro que a demonstração
+     escreve em item.style.transform fica suavizado por cima pela mesma
+     transição, e a bolinha passa a "chegar atrasada" no ponto de cada
+     quadro em vez de ocupá-lo na hora — a mão (sem transição) não tem esse
+     problema, e o descompasso entre as duas é o que lia como atraso. */
+  item.classList.remove("ease");
   var t0 = performance.now();
   var inicio = {x:c.de.x, y:c.de.y};
 
@@ -1080,7 +1090,14 @@ function soltar(ev){
   item.removeEventListener("pointercancel", soltar);
   var destino = caixaSob(ev.clientX, ev.clientY);
   caixas.forEach(function(b){ b.elemento.classList.remove("ok","no"); });
-  if(!destino){ registrarTentativaFrustrada(); voltarDock(); agendarDicas(); return; }
+  /* voltarDock() primeiro: ela liga a classe "ease" (o deslizar de volta ao
+     dock). Se a contagem de tentativas escalasse a dica ANTES disso, e essa
+     escalada caísse no nível 2 (demoMao arrastando o item quadro a quadro),
+     o voltarDock() rodando por último religaria "ease" bem na hora em que a
+     demonstração começa — e cada quadro passaria a ser suavizado por cima
+     pela transição, a bolinha "chegando atrasada" em vez de ocupar o ponto
+     na hora. voltarDock() tem que terminar antes de qualquer dica nova. */
+  if(!destino){ voltarDock(); registrarTentativaFrustrada(); agendarDicas(); return; }
   if(destino.cor.id === atual.id) acertar(destino);
   else errar(destino);
 }
@@ -1092,7 +1109,6 @@ function voltarDock(){
 }
 function errar(destino){
   errosNaTentativa++;
-  registrarTentativaFrustrada();
   /* O erro é gravado no instante em que acontece. Se ficasse só somado ao
      registro do acerto, o painel mostraria zero enquanto o item não fosse
      concluído — e um item abandonado (recarregar, trocar ajuste, fim de
@@ -1110,6 +1126,10 @@ function errar(destino){
   somNeutro();
   vibrar([40,60,40]);
   voltarDock();
+  /* Depois de voltarDock(), nunca antes — mesmo motivo do soltar(): se isto
+     escalar para o nível 2 (demoMao), precisa ser a última coisa a mexer na
+     classe "ease" do item. */
+  registrarTentativaFrustrada();
   agendarDicas();
 }
 function acertar(caixa){
