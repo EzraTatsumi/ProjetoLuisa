@@ -705,8 +705,8 @@ var timers=[], rodando=false;
 
 function paleta(){ return CORES.slice(0, cfg.niveis); }
 
-function dimensoes(){
-  var n = cfg.niveis;
+function dimensoes(niveis){
+  var n = niveis || cfg.niveis;
   var w = stage.clientWidth || window.innerWidth;
   var bx = n<=2 ? Math.min(w*0.34, 150) : Math.min(w*0.30, 128);
   app.style.setProperty("--bx", Math.round(bx)+"px");
@@ -719,16 +719,17 @@ function dimensoes(){
    o afastamento como fração da altura real do palco (não da tela), para
    escalar igual em celular e tablet, e sobrescrevem o clamp() com um valor
    fixo em px no próprio elemento. */
-function ajustarDistancia(){
-  var propriedade = cfg.direcao === "desce" ? "top" : "bottom";
+function ajustarDistancia(direcao, distancia){
+  var d = direcao || cfg.direcao, dist = distancia || cfg.distancia;
+  var propriedade = d === "desce" ? "top" : "bottom";
   var oposta = propriedade === "top" ? "bottom" : "top";
   dock.style[oposta] = "";
-  if(cfg.distancia !== "curto" && cfg.distancia !== "longo"){
+  if(dist !== "curto" && dist !== "longo"){
     dock.style[propriedade] = "";
     return;
   }
   var h = stage.clientHeight || window.innerHeight;
-  var curto = cfg.distancia === "curto";
+  var curto = dist === "curto";
   var frac = curto ? 0.50 : 0.10;
   var min = curto ? 130 : 40, max = curto ? 300 : 90;
   dock.style[propriedade] = Math.max(min, Math.min(max, Math.round(h*frac))) + "px";
@@ -746,6 +747,25 @@ function montarCaixas(){
     d.setAttribute("aria-label", "Caixa " + c.nome);
     boxesEl.appendChild(d);
     return {cor:c, elemento:d};
+  });
+}
+
+/* Prévia decorativa da tela de entrada: sempre "3 caixas, desce", pouco
+   importando o que os pais configuraram — essa tela é o convite do app, não
+   um espelho do jogo. O jogo em si só assume a configuração real quando
+   "Começar" é tocado (é lá que montarCaixas() volta a ler cfg de verdade).
+   Reaproveita dimensoes()/ajustarDistancia() só para não duplicar a régua de
+   tamanho, mas nunca toca em cfg, caixas ou fila — nenhum estado do jogo. */
+function previewEntrada(){
+  app.classList.toggle("desce", true);
+  dimensoes(3);
+  ajustarDistancia("desce", "medio");
+  boxesEl.innerHTML = "";
+  CORES.slice(0,3).forEach(function(c){
+    var d = document.createElement("div");
+    d.className = "box"; d.style.setProperty("--c", c.hex);
+    d.setAttribute("aria-label", "Caixa " + c.nome);
+    boxesEl.appendChild(d);
   });
 }
 
@@ -1111,8 +1131,16 @@ function abrirPainel(){
 }
 el("close").addEventListener("click", function(){
   sheet.hidden = true;
-  rodando = true;
-  montarCaixas(); novaRodada();
+  /* O painel dos pais pode ser aberto direto da tela de entrada, antes de
+     "Começar" — o segurar no cantinho funciona ali de propósito. Fechar
+     nesse caso deve voltar para a entrada (com a prévia fixa), não iniciar
+     uma rodada de verdade escondida atrás do convite. */
+  if(veil.classList.contains("hide")){
+    rodando = true;
+    montarCaixas(); novaRodada();
+  } else {
+    previewEntrada();
+  }
 });
 
 function segmento(host, valores, atualVal, rotulo, aoEscolher){
@@ -1289,13 +1317,14 @@ var reflow;
 window.addEventListener("resize", function(){
   clearTimeout(reflow);
   reflow = setTimeout(function(){
+    if(!veil.classList.contains("hide")){ previewEntrada(); return; }
     if(!rodando) { montarCaixas(); return; }
     montarCaixas(); novaRodada();
   }, 220);
 });
 document.addEventListener("gesturestart", function(e){ e.preventDefault(); });
 
-montarCaixas();
+previewEntrada();
 montarTally();
 })();
 </script>
