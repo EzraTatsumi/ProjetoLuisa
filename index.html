@@ -177,7 +177,13 @@ button{font:inherit;color:inherit}
   transform:translateX(-50%);
   border-radius:50%; background:var(--sunk);
   box-shadow:inset 0 2px 5px var(--shadow);
+  transition:opacity .15s ease;
 }
+/* Em "curto" o dock pode ficar perto do centro da tela — bem onde o convite
+   inicial senta. O dock nunca faz parte do que a tela de entrada quer
+   mostrar (a prévia são as caixas coloridas), então some enquanto o convite
+   está de pé, e volta assim que "Começar" é tocado. */
+#app:has(> .veil:not(.hide)) #dock{opacity:0}
 .trail{position:absolute; inset:0; pointer-events:none; z-index:10}
 
 /* ---------- mãozinha (demonstração e palmas) ---------- */
@@ -420,6 +426,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", aplic
         <span class="lab">Direção<span class="sub">Para onde o item vai: caixas em cima ou embaixo</span></span>
         <div class="segs" id="segDirecao"></div>
       </div>
+      <div class="row">
+        <span class="lab">Distância de arraste<span class="sub">Quão longe o item nasce das caixas. Curto para quem ainda está aprendendo a arrastar</span></span>
+        <div class="segs" id="segDistancia"></div>
+      </div>
     </div>
 
     <div class="sec">
@@ -539,7 +549,7 @@ function svgForma(id, contorno){
 
 /* ---------------- ajustes ---------------- */
 var PADRAO = {niveis:1, rodada:6, dicas:true, preview:true, som:true, voz:true, vol:2,
-              forma:"bola", direcao:"sobe", tema:"auto"};
+              forma:"bola", direcao:"sobe", tema:"auto", distancia:"medio"};
 var cfg = load("cdc.cfg", PADRAO);
 function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v?Object.assign({},d,v):Object.assign({},d);}catch(e){return Object.assign({},d);} }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
@@ -557,7 +567,7 @@ function gravar(t){
 }
 
 /* ---------------- áudio ---------------- */
-var ctx=null, master=null;
+var ctx=null, master=null, iosDestravado=false;
 function audioOn(){
   if(ctx) { if(ctx.state==="suspended") ctx.resume(); return; }
   var AC = window.AudioContext || window.webkitAudioContext;
@@ -566,7 +576,38 @@ function audioOn(){
   master = ctx.createGain();
   master.gain.value = vol();
   master.connect(ctx.destination);
+  destravarIOS();
 }
+/* O iPhone silencia o Web Audio API (osciladores e buffers, que é tudo que
+   este jogo usa) quando a chavinha lateral está no mudo — a Safari trata
+   esse tipo de som como categoria "ambient", que respeita a chavinha, ao
+   contrário de um elemento <audio>, que usa "playback" e a ignora. Tocar um
+   áudio de 1 amostra muda, uma vez, dentro do mesmo gesto que já está em
+   andamento, muda a sessão da página inteira para "playback": os sons do
+   jogo passam a valer mesmo com o aparelho no silencioso. A voz da
+   comemoração usa uma API separada (speechSynthesis), que só "destrava" da
+   mesma forma — falando algo, uma vez, dentro de um gesto real; daí a fala
+   vazia aqui, que não se ouve mas libera a fala de verdade que vem depois. */
+function destravarIOS(){
+  if(iosDestravado) return; iosDestravado = true;
+  try{
+    var a = new Audio("data:audio/wav;base64,UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA");
+    a.play().catch(function(){});
+  }catch(e){}
+  try{
+    if(window.speechSynthesis){
+      var u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      speechSynthesis.speak(u);
+    }
+  }catch(e){}
+}
+/* iOS suspende o AudioContext ao bloquear a tela ou trocar de app — sem isto,
+   ele só voltaria a tocar na próxima vez que pegar() ou o botão "Começar"
+   rodassem audioOn(), o que pode nunca acontecer no meio de uma rodada. */
+document.addEventListener("visibilitychange", function(){
+  if(document.visibilityState === "visible" && ctx && ctx.state === "suspended") ctx.resume();
+});
 function vol(){ return [0,0.35,0.7,1][cfg.vol] * 0.85; }
 function setVol(){ if(master) master.gain.value = vol(); }
 
@@ -672,9 +713,31 @@ function dimensoes(){
   app.style.setProperty("--it", Math.round(Math.min(bx*0.52, 74))+"px");
 }
 
+/* Distância entre o ponto de partida (dock) e as caixas. "Médio" é o
+   original: não mexe em nada, o clamp() do CSS continua valendo — quem nunca
+   abrir este ajuste não percebe diferença alguma. "Curto" e "longo" calculam
+   o afastamento como fração da altura real do palco (não da tela), para
+   escalar igual em celular e tablet, e sobrescrevem o clamp() com um valor
+   fixo em px no próprio elemento. */
+function ajustarDistancia(){
+  var propriedade = cfg.direcao === "desce" ? "top" : "bottom";
+  var oposta = propriedade === "top" ? "bottom" : "top";
+  dock.style[oposta] = "";
+  if(cfg.distancia !== "curto" && cfg.distancia !== "longo"){
+    dock.style[propriedade] = "";
+    return;
+  }
+  var h = stage.clientHeight || window.innerHeight;
+  var curto = cfg.distancia === "curto";
+  var frac = curto ? 0.50 : 0.10;
+  var min = curto ? 130 : 40, max = curto ? 300 : 90;
+  dock.style[propriedade] = Math.max(min, Math.min(max, Math.round(h*frac))) + "px";
+}
+
 function montarCaixas(){
   app.classList.toggle("desce", cfg.direcao === "desce");
   dimensoes();
+  ajustarDistancia();
   boxesEl.innerHTML = "";
   caixas = paleta().map(function(c){
     var d = document.createElement("div");
@@ -1097,6 +1160,9 @@ function pintarControles(){
   segmento(el("segDirecao"), ["sobe","desce"], cfg.direcao,
     function(v){ return v === "sobe" ? "sobe" : "desce"; },
     function(v){ cfg.direcao = v; save("cdc.cfg", cfg); pintarControles(); });
+  segmento(el("segDistancia"), ["curto","medio","longo"], cfg.distancia,
+    function(v){ return v === "medio" ? "médio" : v; },
+    function(v){ cfg.distancia = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segNiveis"), [1,2,3,4], cfg.niveis, null, function(v){ cfg.niveis = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segRodada"), [4,6,8,12], cfg.rodada, null, function(v){ cfg.rodada = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segVol"), [1,2,3], cfg.vol, function(v){ return ["","baixo","médio","alto"][v]; }, function(v){ cfg.vol = v; save("cdc.cfg", cfg); setVol(); pintarControles(); });
