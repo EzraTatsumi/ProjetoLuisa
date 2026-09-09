@@ -153,7 +153,11 @@ button{font:inherit;color:inherit}
 .box.slot.completa .furo .corpo{fill:var(--c)}
 .box.slot.completa .furo .claro{fill:rgba(255,255,255,.82)}
 
-.box.slot--metade .meia{position:absolute; top:13%; left:13%; right:13%; bottom:13%; width:auto; height:auto}
+/* as duas metades ocupam a MESMA célula do grid (sobrepostas) e herdam o
+   tamanho/centralização de .box.slot svg — sem position:absolute, que no
+   WebKit do iPhone deixava o SVG assumir o tamanho intrínseco (enorme, fora
+   do centro) em vez dos 74% da caixa */
+.box.slot--metade .meia{grid-area:1 / 1}
 .box.slot--metade .meia .corpo{fill:var(--c)}
 .box.slot--metade .meia .claro{fill:rgba(255,255,255,.82)}
 .box.slot--metade .meia.esq{opacity:.32}       /* fantasma da metade que ela tem que casar */
@@ -955,8 +959,22 @@ function posDock(){
   return { x: r.left - s.left + (r.width - it)/2, y: r.top - s.top + (r.height - it)/2 };
 }
 
+/* Nos jogos de encaixe o alvo se "preenche" no acerto (comemoração) e precisa
+   voltar a ficar vazio para a próxima peça — senão o item seguinte, quando é
+   da mesma forma/desenho, chega e o destino já parece ocupado. No jogo de cor
+   não: ali os pontinhos na caixa se acumulam de propósito, como placar. */
+function resetarAlvos(){
+  var m = modo();
+  if(m.id === "cor") return;
+  caixas.forEach(function(b){
+    b.elemento.classList.remove("completa","ok","no");
+    m.pintarCaixa(b.elemento, b.u);
+  });
+}
+
 function proximo(){
   limparTimers();
+  resetarAlvos();
   if(item){ item.remove(); item = null; }
   if(feito >= cfg.rodada){ atual = null; setTimeout(function(){ somRodada(); festaRodada(); }, 120); return; }
   atual = fila[feito];
