@@ -135,6 +135,31 @@ button{font:inherit;color:inherit}
 .box.cue{animation:cue 1.15s ease-in-out infinite}
 @keyframes cue{0%,100%{transform:scale(1)}50%{transform:scale(1.075)}}
 
+/* ---------- caixas dos jogos de encaixe (forma / metade) ---------- */
+/* Mesma silhueta, mesmo tamanho e mesma régua de ::after (o anel de acerto/erro)
+   da caixa de cor — só o miolo muda: em vez da cor chapada, um recorte no fundo
+   onde a peça entra. Fundo neutro para o emparelhamento ser pelo formato. */
+.box.slot{
+  background:var(--surface);
+  box-shadow:inset 0 -5px 0 rgba(0,0,0,.06), inset 0 3px 9px rgba(0,0,0,.10);
+  display:grid; place-items:center; padding:0;
+}
+.box.slot svg{width:74%; height:74%; display:block}
+.box.slot .chip{display:none}                 /* o preenchimento do encaixe é a comemoração aqui */
+/* o buraco: um recorte nitidamente mais escuro que a caixa, para ela mirar */
+.box.slot .furo .corpo, .box.slot .furo .claro{fill:color-mix(in srgb, var(--ink) 17%, var(--surface))}
+.box.slot.completa .furo{transition:none}
+.box.slot.completa .furo .corpo{fill:var(--c)}
+.box.slot.completa .furo .claro{fill:rgba(255,255,255,.82)}
+
+.box.slot--metade .meia{position:absolute; top:13%; left:13%; right:13%; bottom:13%; width:auto; height:auto}
+.box.slot--metade .meia .corpo{fill:var(--c)}
+.box.slot--metade .meia .claro{fill:rgba(255,255,255,.82)}
+.box.slot--metade .meia.esq{opacity:.32}       /* fantasma da metade que ela tem que casar */
+.box.slot--metade .meia.dir{opacity:0; transition:opacity .32s ease}
+.box.slot--metade.completa .meia.esq{opacity:1}
+.box.slot--metade.completa .meia.dir{opacity:1}
+
 .chip{
   width:16px; height:16px; border-radius:50%;
   background:rgba(255,255,255,.9);
@@ -251,6 +276,14 @@ button{font:inherit;color:inherit}
 }
 .go:active{transform:translateY(1px)}
 .veil.hide{display:none}
+
+/* ---------- escolha de jogo na tela de entrada ---------- */
+.jogos{display:flex; flex-direction:column; gap:12px; width:min(320px,82vw)}
+.jogos .go{
+  width:100%; padding:15px 22px; border-radius:18px; font-size:18px;
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+}
+.jogos .go small{font-weight:400; font-size:12.5px; opacity:.72; letter-spacing:0}
 
 /* ---------- parent sheet ---------- */
 .sheet{
@@ -395,8 +428,12 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", aplic
 
   <div class="veil" id="veil">
     <h1>Caixa de Cores</h1>
-    <button class="go" id="go">Começar</button>
-    <p>Arraste a bolinha até a caixa da mesma cor.<br>Segure o ponto no canto superior esquerdo por 1,5 s para abrir o painel dos pais.</p>
+    <div class="jogos" id="jogos">
+      <button class="go" type="button" data-jogo="cor">Cores<small>arraste até a cor igual</small></button>
+      <button class="go" type="button" data-jogo="forma">Formas<small>encaixe no formato certo</small></button>
+      <button class="go" type="button" data-jogo="metade">Metades<small>complete o desenho</small></button>
+    </div>
+    <p>Segure o ponto no canto superior esquerdo por 1,5 s para abrir o painel dos pais.</p>
   </div>
 </div>
 
@@ -409,9 +446,9 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", aplic
 
     <div class="sec">
       <h3>Nível</h3>
-      <p class="note">O nível é quantas cores concorrem ao mesmo tempo. Suba só quando ela acertar sem dica em duas rodadas seguidas. Ordem de entrada das cores: azul, amarelo, vermelho, verde — os pares mais discrimináveis primeiro.</p>
+      <p class="note" id="noteNivel">O nível é quantas cores concorrem ao mesmo tempo. Suba só quando ela acertar sem dica em duas rodadas seguidas. Ordem de entrada das cores: azul, amarelo, vermelho, verde — os pares mais discrimináveis primeiro.</p>
       <div class="row">
-        <span class="lab">Cores na tela<span class="sub">1 cor = uma caixa só; impossível errar</span></span>
+        <span class="lab"><span id="labNivel">Cores na tela</span><span class="sub" id="subNivel">1 cor = uma caixa só; impossível errar</span></span>
         <div class="segs" id="segNiveis"></div>
       </div>
       <div class="row">
@@ -422,8 +459,10 @@ try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", aplic
 
     <div class="sec">
       <h3>Itens</h3>
-      <p class="note">A forma é a mesma para todos os itens da rodada — só a cor muda. Se as formas variassem entre si, você não saberia se ela emparelhou pela cor ou pelo desenho. Trocar de forma de vez em quando é um bom teste de generalização: a regra é a mesma com estrela ou com trem. “Sortear a cada item” faz essa troca sozinho, item a item — vale depois que o emparelhamento por cor já estiver firme; antes disso, o desenho novo é só mais uma variável para ela resolver. A forma de cada tentativa fica registrada no CSV.</p>
-      <div class="formas" id="formas"></div>
+      <div id="blocoFormas">
+        <p class="note">A forma é a mesma para todos os itens da rodada — só a cor muda. Se as formas variassem entre si, você não saberia se ela emparelhou pela cor ou pelo desenho. Trocar de forma de vez em quando é um bom teste de generalização: a regra é a mesma com estrela ou com trem. “Sortear a cada item” faz essa troca sozinho, item a item — vale depois que o emparelhamento por cor já estiver firme; antes disso, o desenho novo é só mais uma variável para ela resolver. A forma de cada tentativa fica registrada no CSV.</p>
+        <div class="formas" id="formas"></div>
+      </div>
       <div class="row" style="margin-top:14px">
         <span class="lab">Direção<span class="sub">Para onde o item vai: caixas em cima ou embaixo</span></span>
         <div class="segs" id="segDirecao"></div>
@@ -557,13 +596,91 @@ function svgForma(id, contorno){
          (contorno ? '<g class="contorno">' + f + "</g>" : "") + f + "</svg>";
 }
 
+/* Silhueta vazada: a figura como recorte no fundo da caixa (jogo "forma"). */
+function svgFuro(id){
+  return '<svg class="furo" viewBox="-6 -6 112 112" aria-hidden="true">' +
+         (FORMAS[id] || FORMAS.bola).svg + "</svg>";
+}
+/* Metade da figura (jogo "metade"): recorta um lado da figura. Na moldura as
+   duas metades ficam no lugar de origem — sobrepostas, reconstroem a figura
+   inteira exatamente (é assim que a moldura "se completa" no acerto). Só a peça
+   solta é recentralizada (centralizar=true), senão a meia figura penderia para
+   um canto do disco de partida. O id do clip é único por chamada: a mesma
+   figura aparece cortada em vários lugares e ids repetidos se atrapalhariam. */
+var CLIP = 0;
+function svgMetade(id, lado, classe, centralizar){
+  var f = (FORMAS[id] || FORMAS.bola).svg;
+  var x = lado === "esq" ? -6 : 48;          /* metade esq. vs. dir.; 2u de sobra no meio para o encaixe não deixar costura */
+  var uid = "mc" + (++CLIP);
+  var recorte = '<g clip-path="url(#' + uid + ')">' + f + "</g>";
+  if(centralizar) recorte = '<g transform="translate(' + (lado === "esq" ? 24 : -24) + ',0)">' + recorte + "</g>";
+  return '<svg class="' + (classe || "peca") + '" viewBox="-6 -6 112 112" aria-hidden="true">' +
+    '<defs><clipPath id="' + uid + '"><rect x="' + x + '" y="-6" width="58" height="112"/></clipPath></defs>' +
+    recorte + "</svg>";
+}
+
+/* ---------------- jogos ----------------
+   O que muda de um jogo para o outro é só: quais unidades concorrem numa rodada,
+   como a caixa-alvo e a peça são desenhadas, e os rótulos. Todo o resto —
+   arrastar, distância, dicas graduadas, contagem de erro, comemoração, registro —
+   é comum e não sabe qual jogo está rodando. O emparelhamento é sempre por
+   unidade.id (cor, forma ou desenho). */
+var PECA = "#3D82D6";
+var JOGOS = {
+  cor: {
+    id:"cor", atividade:"emparelhamento-de-cor", classeCaixa:"", usaSeletorForma:true,
+    niveisOpcoes:[1,2,3,4],
+    rotuloNivel:"Cores na tela", subNivel:"1 cor = uma caixa só; impossível errar",
+    noteNivel:"O nível é quantas cores concorrem ao mesmo tempo. Suba só quando ela acertar sem dica em duas rodadas seguidas. Ordem de entrada das cores: azul, amarelo, vermelho, verde — os pares mais discrimináveis primeiro.",
+    unidades:function(n){ return CORES.slice(0, n).map(function(c){ return {id:c.id, nome:c.nome, hex:c.hex}; }); },
+    amostra:function(){ return this.unidades(3); },
+    pintarCaixa:function(d,u){ d.style.setProperty("--c", u.hex); d.innerHTML = ""; },
+    pintarItem:function(it,u){ var f = formaDoItem(); it.innerHTML = svgForma(f, true); it.style.setProperty("--c", u.hex); },
+    rotuloCaixa:function(u){ return "Caixa " + u.nome; },
+    rotuloItem:function(u){ return (FORMAS[formaAtual] || FORMAS.bola).nome + ", " + u.nome; }
+  },
+  forma: {
+    id:"forma", atividade:"encaixe-de-forma", classeCaixa:"slot slot--forma", usaSeletorForma:false,
+    niveisOpcoes:[2,3,4,6],
+    rotuloNivel:"Formas na tela", subNivel:"quantos formatos concorrem ao mesmo tempo",
+    noteNivel:"Quantos formatos diferentes aparecem por rodada. Todas as peças têm a mesma cor de propósito: assim ela emparelha pelo formato, não pela cor. Ordem de entrada: bola, estrela, flor, carro, trem, avião.",
+    unidades:function(n){ return Object.keys(FORMAS).slice(0, n).map(function(id){ return {id:id, nome:FORMAS[id].nome}; }); },
+    amostra:function(){ return this.unidades(3); },
+    pintarCaixa:function(d,u){ d.style.setProperty("--c", PECA); d.innerHTML = svgFuro(u.id); },
+    pintarItem:function(it,u){ formaAtual = u.id; it.innerHTML = svgForma(u.id, true); it.style.setProperty("--c", PECA); },
+    rotuloCaixa:function(u){ return "Encaixe " + u.nome; },
+    rotuloItem:function(u){ return u.nome; }
+  },
+  metade: {
+    id:"metade", atividade:"metades-do-desenho", classeCaixa:"slot slot--metade", usaSeletorForma:false,
+    niveisOpcoes:[2,3,4,6],
+    rotuloNivel:"Desenhos na tela", subNivel:"quantos desenhos concorrem ao mesmo tempo",
+    noteNivel:"Quantos desenhos pela metade aparecem por rodada. Cada moldura mostra a metade esquerda; ela traz a metade direita que completa aquele desenho. Ordem de entrada: bola, estrela, flor, carro, trem, avião.",
+    unidades:function(n){ return Object.keys(FORMAS).slice(0, n).map(function(id){ return {id:id, nome:FORMAS[id].nome}; }); },
+    amostra:function(){ return this.unidades(3); },
+    pintarCaixa:function(d,u){ d.style.setProperty("--c", PECA); d.innerHTML = svgMetade(u.id,"esq","meia esq") + svgMetade(u.id,"dir","meia dir"); },
+    pintarItem:function(it,u){ formaAtual = u.id; it.innerHTML = svgMetade(u.id, "dir", "peca", true); it.style.setProperty("--c", PECA); },
+    rotuloCaixa:function(u){ return "Metade de " + u.nome; },
+    rotuloItem:function(u){ return "metade de " + u.nome; }
+  }
+};
+function modo(){ return JOGOS[cfg.jogo] || JOGOS.cor; }
+function unidades(){ return modo().unidades(cfg.niveis); }
+/* Cada jogo tem seus níveis possíveis; um cfg.niveis herdado de outro jogo é
+   trazido para dentro da faixa deste. */
+function ajustarNiveis(){
+  var o = modo().niveisOpcoes;
+  if(o.indexOf(cfg.niveis) < 0){ cfg.niveis = o[0]; save("cdc.cfg", cfg); }
+}
+
 /* ---------------- ajustes ---------------- */
-var PADRAO = {niveis:1, rodada:6, dicas:true, preview:true, som:true, voz:true, vol:2,
+var PADRAO = {jogo:"cor", niveis:1, rodada:6, dicas:true, preview:true, som:true, voz:true, vol:2,
               forma:"bola", direcao:"sobe", tema:"auto", distancia:"medio", vibra:true,
               corrigirDe:"pote"};
-var cfg = load("cdc.cfg", PADRAO);
 function load(k,d){ try{ var v=JSON.parse(localStorage.getItem(k)); return v?Object.assign({},d,v):Object.assign({},d);}catch(e){return Object.assign({},d);} }
 function save(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+var cfg = load("cdc.cfg", PADRAO);
+ajustarNiveis();   /* cfg.niveis herdado pode estar fora da faixa do jogo lembrado */
 
 /* ---------------- registro ---------------- */
 var LOGKEY = "cdc.log";
@@ -740,12 +857,10 @@ var fila=[], atual=null, item=null, feito=0, caixas=[];
 var tIni=0, tPrimeiroToque=0, errosNaTentativa=0, dicaUsada=0, tentativasSemSucesso=0;
 var timers=[], rodando=false;
 
-function paleta(){ return CORES.slice(0, cfg.niveis); }
-
 function dimensoes(niveis){
   var n = niveis || cfg.niveis;
   var w = stage.clientWidth || window.innerWidth;
-  var bx = n<=2 ? Math.min(w*0.34, 150) : Math.min(w*0.30, 128);
+  var bx = n<=2 ? Math.min(w*0.34, 150) : n>=5 ? Math.min(w*0.26, 108) : Math.min(w*0.30, 128);
   app.style.setProperty("--bx", Math.round(bx)+"px");
   app.style.setProperty("--it", Math.round(Math.min(bx*0.52, 74))+"px");
 }
@@ -773,46 +888,54 @@ function ajustarDistancia(direcao, distancia){
 }
 
 function montarCaixas(){
+  var m = modo();
   app.classList.toggle("desce", cfg.direcao === "desce");
+  app.dataset.jogo = m.id;
   dimensoes();
   ajustarDistancia();
   boxesEl.innerHTML = "";
-  caixas = paleta().map(function(c){
+  caixas = m.unidades(cfg.niveis).map(function(u){
     var d = document.createElement("div");
-    d.className = "box"; d.style.setProperty("--c", c.hex);
-    d.dataset.cor = c.id;
-    d.setAttribute("aria-label", "Caixa " + c.nome);
+    d.className = "box" + (m.classeCaixa ? " " + m.classeCaixa : "");
+    m.pintarCaixa(d, u);
+    d.dataset.uid = u.id;
+    d.setAttribute("aria-label", m.rotuloCaixa(u));
     boxesEl.appendChild(d);
-    return {cor:c, elemento:d};
+    return {u:u, elemento:d};
   });
 }
 
 /* Prévia decorativa da tela de entrada: sempre "3 caixas, desce", pouco
    importando o que os pais configuraram — essa tela é o convite do app, não
-   um espelho do jogo. O jogo em si só assume a configuração real quando
-   "Começar" é tocado (é lá que montarCaixas() volta a ler cfg de verdade).
-   Reaproveita dimensoes()/ajustarDistancia() só para não duplicar a régua de
-   tamanho, mas nunca toca em cfg, caixas ou fila — nenhum estado do jogo. */
+   um espelho do jogo. Mostra uma amostra de 3 alvos do jogo escolhido por
+   último (cores, encaixes ou meias figuras). O jogo em si só assume a
+   configuração real quando um dos botões é tocado (é lá que montarCaixas()
+   volta a ler cfg de verdade). Reaproveita dimensoes()/ajustarDistancia() só
+   para não duplicar a régua de tamanho, mas nunca toca em cfg, caixas ou
+   fila — nenhum estado do jogo. */
 function previewEntrada(){
+  var m = modo();
   app.classList.toggle("desce", true);
+  app.dataset.jogo = m.id;
   dimensoes(3);
   ajustarDistancia("desce", "medio");
   boxesEl.innerHTML = "";
-  CORES.slice(0,3).forEach(function(c){
+  m.amostra().forEach(function(u){
     var d = document.createElement("div");
-    d.className = "box"; d.style.setProperty("--c", c.hex);
-    d.setAttribute("aria-label", "Caixa " + c.nome);
+    d.className = "box" + (m.classeCaixa ? " " + m.classeCaixa : "");
+    m.pintarCaixa(d, u);
+    d.setAttribute("aria-label", m.rotuloCaixa(u));
     boxesEl.appendChild(d);
   });
 }
 
 function novaRodada(){
   if(!rodando) return;
-  var p = paleta(), seq = [];
+  var m = modo(), p = unidades(), seq = [];
   for(var i=0;i<cfg.rodada;i++) seq.push(p[i % p.length]);
   for(var j=seq.length-1;j>0;j--){ var k=Math.floor(Math.random()*(j+1)); var tmp=seq[j]; seq[j]=seq[k]; seq[k]=tmp; }
   fila = seq; feito = 0;
-  caixas.forEach(function(b){ b.elemento.innerHTML = ""; });
+  caixas.forEach(function(b){ b.elemento.classList.remove("completa","ok","no"); m.pintarCaixa(b.elemento, b.u); });
   montarTally();
   proximo();
 }
@@ -836,15 +959,13 @@ function proximo(){
   if(item){ item.remove(); item = null; }
   if(feito >= cfg.rodada){ atual = null; setTimeout(function(){ somRodada(); festaRodada(); }, 120); return; }
   atual = fila[feito];
-  var p = posDock();
+  var m = modo(), p = posDock();
   item = document.createElement("div");
   item.className = "item";
-  var forma = formaDoItem();
-  item.innerHTML = svgForma(forma, true);
-  item.style.setProperty("--c", atual.hex);
+  m.pintarItem(item, atual);
   item.dataset.x = p.x; item.dataset.y = p.y;
   item.style.transform = "translate(" + p.x + "px," + p.y + "px)";
-  item.setAttribute("aria-label", FORMAS[forma].nome + ", " + atual.nome);
+  item.setAttribute("aria-label", m.rotuloItem(atual));
   stage.appendChild(item);
   item.addEventListener("pointerdown", pegar);
   tIni = performance.now(); tPrimeiroToque = 0; errosNaTentativa = 0; dicaUsada = 0; tentativasSemSucesso = 0;
@@ -888,7 +1009,7 @@ function registrarTentativaFrustrada(){
     }
   }
 }
-function alvo(){ for(var i=0;i<caixas.length;i++) if(caixas[i].cor.id === atual.id) return caixas[i]; return caixas[0]; }
+function alvo(){ for(var i=0;i<caixas.length;i++) if(caixas[i].u.id === atual.id) return caixas[i]; return caixas[0]; }
 
 function centros(){
   var s = stage.getBoundingClientRect(), r = alvo().elemento.getBoundingClientRect();
@@ -1086,10 +1207,10 @@ function mover(ev){
     caixas.forEach(function(b){ b.elemento.classList.remove("ok","no"); });
     sobre = alvoCaixa;
     if(sobre){
-      if(cfg.preview) sobre.elemento.classList.add(sobre.cor.id === atual.id ? "ok" : "no");
+      if(cfg.preview) sobre.elemento.classList.add(sobre.u.id === atual.id ? "ok" : "no");
       /* Um toque só, ao entrar na caixa certa — não a cada pointermove
          (ficaria zunindo o tempo todo enquanto o dedo passeia por cima). */
-      if(sobre.cor.id === atual.id) vibrar(15);
+      if(sobre.u.id === atual.id) vibrar(15);
     }
   }
 }
@@ -1126,7 +1247,7 @@ function soltar(ev){
     agendarDicas();
     return;
   }
-  if(destino.cor.id === atual.id) acertar(destino);
+  if(destino.u.id === atual.id) acertar(destino);
   else errar(destino);
 }
 function voltarDock(){
@@ -1145,10 +1266,11 @@ function errar(destino){
     s: sessaoId,
     t: new Date().toISOString(),
     ev: 1,                                  /* 1 = erro; ausente = item concluído */
+    j: modo().id,
     n: cfg.niveis,
-    cor: atual.id,
+    cor: atual.id,                          /* id da unidade-alvo: cor, forma ou desenho */
     f: formaAtual,
-    solto: destino ? destino.cor.id : null, /* onde a bolinha foi solta: mostra qual par confunde */
+    solto: destino ? destino.u.id : null,   /* onde a peça foi solta: mostra qual par confunde */
     dica: dicaUsada
   });
   somNeutro();
@@ -1176,10 +1298,14 @@ function acertar(caixa){
   var chip = document.createElement("i");
   chip.className = "chip";
   caixa.elemento.appendChild(chip);
+  /* Nos jogos de encaixe a comemoração no alvo é o próprio encaixe se
+     preenchendo — a moldura fica com a figura inteira, colorida. */
+  if(modo().id !== "cor") caixa.elemento.classList.add("completa");
 
   gravar({
     s: sessaoId,
     t: new Date().toISOString(),
+    j: modo().id,
     n: cfg.niveis,
     cor: atual.id,
     f: formaAtual,
@@ -1223,6 +1349,7 @@ handle.addEventListener("pointerdown", function(){
 function abrirPainel(){
   handle.dataset.arming = "0";
   rodando = false; limparTimers();
+  pintarControles();          /* rótulos e opções seguem o jogo escolhido na entrada */
   sheet.hidden = false;
   desenharDados();
 }
@@ -1281,14 +1408,19 @@ function pintarFormas(){
     " sortear");
 }
 function pintarControles(){
-  pintarFormas();
+  var m = modo();
+  el("labNivel").textContent = m.rotuloNivel;
+  el("subNivel").textContent = m.subNivel;
+  el("noteNivel").textContent = m.noteNivel;
+  el("blocoFormas").hidden = !m.usaSeletorForma;
+  if(m.usaSeletorForma) pintarFormas();
+  segmento(el("segNiveis"), m.niveisOpcoes, cfg.niveis, null, function(v){ cfg.niveis = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segDirecao"), ["sobe","desce"], cfg.direcao,
     function(v){ return v === "sobe" ? "sobe" : "desce"; },
     function(v){ cfg.direcao = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segDistancia"), ["curto","medio","longo"], cfg.distancia,
     function(v){ return v === "medio" ? "médio" : v; },
     function(v){ cfg.distancia = v; save("cdc.cfg", cfg); pintarControles(); });
-  segmento(el("segNiveis"), [1,2,3,4], cfg.niveis, null, function(v){ cfg.niveis = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segRodada"), [4,6,8,12], cfg.rodada, null, function(v){ cfg.rodada = v; save("cdc.cfg", cfg); pintarControles(); });
   segmento(el("segVol"), [1,2,3], cfg.vol, function(v){ return ["","baixo","médio","alto"][v]; }, function(v){ cfg.vol = v; save("cdc.cfg", cfg); setVol(); pintarControles(); });
   segmento(el("segTema"), ["auto","claro","escuro"], cfg.tema,
@@ -1316,16 +1448,16 @@ function desenharDados(){
   var tw = el("tw");
   if(!d.length){ tw.innerHTML = '<p class="empty">Nenhuma tentativa nesta sessão ainda.</p>'; return; }
   var linhas = d.slice(-40).reverse().map(function(r){
-    var c = CORES.filter(function(x){ return x.id === r.cor; })[0] || CORES[0];
+    var j = r.j || "cor";
     var inicio = "<tr>" +
       "<td>" + new Date(r.t).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"}) + "</td>" +
-      '<td><span class="dot" style="background:' + c.hex + '"></span>' + c.nome + "</td>" +
+      "<td>" + JOGONOME(j) + "</td>" +
+      "<td>" + rotuloUnidade(j, r.cor) + "</td>" +
       "<td>" + r.n + "</td>" +
       "<td>" + (r.dica === 0 ? "—" : r.dica) + "</td>";
     if(r.ev){
-      var sol = CORES.filter(function(x){ return x.id === r.solto; })[0];
       return inicio +
-        '<td class="erro">→ ' + (sol ? sol.nome : "fora") + "</td>" +
+        '<td class="erro">→ ' + (r.solto ? rotuloUnidade(j, r.solto, true) : "fora") + "</td>" +
         "<td>—</td></tr>";
     }
     return inicio +
@@ -1333,16 +1465,27 @@ function desenharDados(){
       "<td>" + (r.lt/1000).toFixed(1) + "s</td>" +
     "</tr>";
   }).join("");
-  tw.innerHTML = "<table><thead><tr><th>Hora</th><th>Cor</th><th>Cores</th><th>Dica</th><th>Erros</th><th>Tempo</th></tr></thead><tbody>" + linhas + "</tbody></table>";
+  tw.innerHTML = "<table><thead><tr><th>Hora</th><th>Jogo</th><th>Alvo</th><th>Nível</th><th>Dica</th><th>Erros</th><th>Tempo</th></tr></thead><tbody>" + linhas + "</tbody></table>";
 }
 function tile(v, r){ return '<div class="stat"><b>' + v + "</b><span>" + r + "</span></div>"; }
+function JOGONOME(j){ return {cor:"Cores", forma:"Formas", metade:"Metades"}[j] || j; }
+/* Rótulo do alvo de uma linha: no jogo de cor, a bolinha colorida + nome; nos
+   de encaixe, o nome da figura. O CSS da tabela não muda entre os jogos. */
+function rotuloUnidade(j, id, semDot){
+  if(j === "cor"){
+    var c = CORES.filter(function(x){ return x.id === id; })[0] || CORES[0];
+    return (semDot ? "" : '<span class="dot" style="background:' + c.hex + '"></span>') + c.nome;
+  }
+  return (FORMAS[id] || {nome:id}).nome;
+}
 
 function csv(){
-  var cab = "sessao,hora,tipo,cores_na_tela,forma,cor_alvo,soltou_em,nivel_dica,erros,latencia_1o_toque_ms,latencia_total_ms";
+  var cab = "sessao,hora,jogo,tipo,concorrentes,forma,alvo,soltou_em,nivel_dica,erros,latencia_1o_toque_ms,latencia_total_ms";
   var corpo = log.map(function(r){
+    var j = r.j || "cor";
     return r.ev
-      ? [r.s, r.t, "erro", r.n, r.f || "", r.cor, r.solto || "", r.dica, 1, "", ""].join(",")
-      : [r.s, r.t, "acerto", r.n, r.f || "", r.cor, "", r.dica, r.err, r.l1, r.lt].join(",");
+      ? [r.s, r.t, j, "erro", r.n, r.f || "", r.cor, r.solto || "", r.dica, 1, "", ""].join(",")
+      : [r.s, r.t, j, "acerto", r.n, r.f || "", r.cor, "", r.dica, r.err, r.l1, r.lt].join(",");
   });
   return [cab].concat(corpo).join("\n");
 }
@@ -1397,19 +1540,25 @@ function sincronizar(){
     bancoDoc.set({
       inicio: d.length ? d[0].t : new Date().toISOString(),
       fim: d.length ? d[d.length-1].t : new Date().toISOString(),
-      atividade: "emparelhamento-de-cor",
+      atividade: modo().atividade,
       tentativas: d.slice(-250)
     }).catch(function(){});
   }, 4000);
 }
 
 /* ---------------- início ---------------- */
-el("go").addEventListener("click", function(){
-  audioOn();
-  veil.classList.add("hide");
-  rodando = true;
-  montarCaixas();
-  novaRodada();
+/* Três botões, um por jogo. Cada um fixa cfg.jogo (lembrado para a próxima
+   abertura), traz cfg.niveis para a faixa desse jogo e começa a rodada. */
+Array.prototype.forEach.call(document.querySelectorAll("#jogos .go"), function(b){
+  b.addEventListener("click", function(){
+    cfg.jogo = b.dataset.jogo; save("cdc.cfg", cfg);
+    ajustarNiveis();
+    audioOn();
+    veil.classList.add("hide");
+    rodando = true;
+    montarCaixas();
+    novaRodada();
+  });
 });
 
 var reflow;
